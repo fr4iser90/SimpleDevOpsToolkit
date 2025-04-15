@@ -1,5 +1,7 @@
 # SimpleDevOpsToolkit - Utility Suite
 
+**GitHub Repository:** [https://github.com/fr4iser90/SimpleDevOpsToolkit](https://github.com/fr4iser90/SimpleDevOpsToolkit)
+
 ## Overview
 
 This utility suite provides a generic framework for managing Docker-based applications. It offers tools for deploying, configuring, and maintaining projects defined in a `.project_config.sh` file located in the project's root directory, simplifying operations on local or remote servers through an interactive command-line interface.
@@ -24,7 +26,7 @@ This utility suite provides a generic framework for managing Docker-based applic
 - Git (to clone the toolkit repository).
 - For remote use: SSH access to your target server.
 - Docker and Docker Compose installed on the target machine (local or remote).
-- A `.project_config.sh` file in the root directory of **each project** you want to manage.
+- A `.project_config.sh` file in the **root directory** of **each project** you want to manage. See the [Configuration Files](#configuration-files) section and the example file `examples/.project_config.sh`.
 
 ### Initial Setup
 
@@ -36,8 +38,10 @@ This utility suite provides a generic framework for managing Docker-based applic
     Replace `<repository_url>` with the actual URL of the toolkit's repository. Choose a suitable location like `~/tools/` or `~/bin/`.
 
 2.  **Prepare Your Project:**
-    *   Ensure each project you want to manage (e.g., `~/Documents/Git/FoundryCord`) has a `.project_config.sh` file in its **root directory**. You can copy and adapt the example file (if one exists in the toolkit) or create one based on your project's needs.
-    *   Example `.project_config.sh` location: `~/Documents/Git/FoundryCord/.project_config.sh`
+    *   Ensure each project you want to manage (e.g., `~/Documents/Git/FoundryCord`) has a `.project_config.sh` file in its **root directory**. 
+    *   Copy or adapt the example configuration from `examples/.project_config.sh` within this repository.
+    *   Make sure to set essential variables like `PROJECT_NAME`, `SERVER_HOST`, `SERVER_USER`, `SERVER_PROJECT_DIR`, `LOCAL_PROJECT_DIR`, etc., according to your project's needs.
+    *   Example location: `~/Documents/Git/FoundryCord/.project_config.sh`
 
 3.  **Run the Toolkit:**
     *   Navigate to your project's directory:
@@ -87,6 +91,8 @@ This makes the command available to all users on the system.
 
 If you are using NixOS or Home Manager, you should manage your PATH and installed tools declaratively through your Nix configuration instead of creating manual symlinks and exporting PATH variables in `.zshrc`.
 
+*(See also the example NixOS module `devopstoolkit.nix` in the repository root, although the Home Manager approach below is generally preferred for user tools.)*
+
 1.  **Ensure `$HOME/.local/bin` is managed by Nix (Optional but Recommended):**
     While Home Manager might add `$HOME/.local/bin` to your PATH by default depending on your setup, it's cleaner to let Nix manage the symlink location as well. A common pattern is to have Nix manage links in a dedicated profile directory that *is* added to your path.
 
@@ -119,9 +125,9 @@ If you are using NixOS or Home Manager, you should manage your PATH and installe
       #   executable = true;
       # };
 
-      # Make sure the *source script* itself has execute permissions
-      # You might need to handle this outside Nix or find a Nix way
-      # if the git repo itself doesn't preserve permissions.
+      # Make sure the *source script* itself has execute permissions.
+      # You might need to run `chmod +x /path/to/your/SimpleDevOpsToolkit/SimpleDevOpsToolkit.sh` 
+      # after cloning if git doesn't preserve permissions, or find a Nix-native way.
 
       # Ensure the PATH includes the directory where the link is created
       # (e.g., ~/.local/bin). Home Manager often handles this automatically
@@ -146,6 +152,22 @@ If you are using NixOS or Home Manager, you should manage your PATH and installe
     ```
 
 This approach ensures that the `SimpleDevOpsToolkit` command is correctly integrated into your Nix-managed environment.
+
+## Basic Usage
+
+Once set up (either via PATH or by calling the full script path), navigate to your project's root directory (where your `.project_config.sh` resides) and run the toolkit:
+
+```bash
+# If installed to PATH
+cd /path/to/your/project
+SimpleDevOpsToolkit
+
+# Or using the full path
+cd /path/to/your/project
+/path/to/cloned/SimpleDevOpsToolkit/SimpleDevOpsToolkit.sh
+```
+
+The interactive menu will guide you through the available options. You can also use command-line flags for direct actions.
 
 ## Main Menu Options
 
@@ -211,7 +233,9 @@ This approach ensures that the `SimpleDevOpsToolkit` command is correctly integr
 ## Configuration Files
 
 The framework relies on configuration loaded from:
-- **`.project_config.sh`**: **REQUIRED**. Must exist in the **root directory of the project** you are currently managing. Defines all project-specific settings (server, paths, project name, container names, DB names, etc.). You need to create/manage this file for each of your projects.
+- **`.project_config.sh`**: **REQUIRED**. Must exist in the **root directory of the project** you are currently managing. Defines all project-specific settings. 
+    *   **Key Variables:** `PROJECT_NAME`, `SERVER_HOST`, `SERVER_USER`, `SERVER_PROJECT_DIR` (for remote), `LOCAL_PROJECT_DIR` (for local/hot-reload), `CONTAINER_NAMES`, `DB_NAME`, `HOT_RELOAD_TARGETS` (optional), etc.
+    *   See the example: `examples/.project_config.sh`
 - `config/config.sh`: Internal script within the toolkit that loads the project's `.project_config.sh` and sets up runtime variables.
 - `config/auto_start.conf`: Defines default auto-start behavior. Values can be overridden by settings in the project's `.project_config.sh`.
 - `.env`: (Optional) If present in the project's root directory or its `docker/` subdirectory, environment variables will be loaded from here.
@@ -247,8 +271,14 @@ SimpleDevOpsToolkit --watch=service1,service2
 
 The utility supports various command-line arguments. Run these from your project directory.
 ```bash
-# Example using the global command
-SimpleDevOpsToolkit --host=192.168.1.100 --user=admin --port=2222 --auto-start --watch-console
+# Example using the global command (remote deploy with specific profile)
+SimpleDevOpsToolkit --remote --profile=gpu-nvidia --quick-deploy
+
+# Example for viewing logs directly
+SimpleDevOpsToolkit --logs=your_service_name --lines=100
+
+# Example for running tests directly
+SimpleDevOpsToolkit --test-simple
 
 # Example using the full path
 /path/to/SimpleDevOpsToolkit/SimpleDevOpsToolkit.sh --rebuild --quick-deploy
@@ -326,3 +356,11 @@ For issues with this utility, please open an issue in the project repository or 
 ## Contribute
 
 We welcome contributions to improve this utility! See our contributing guidelines for more information.
+
+## About
+
+ Simple local / remote deployment toolkit for Docker-based projects.
+
+**Repository:** [https://github.com/fr4iser90/SimpleDevOpsToolkit](https://github.com/fr4iser90/SimpleDevOpsToolkit)
+
+### Resources

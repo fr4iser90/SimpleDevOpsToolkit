@@ -330,8 +330,6 @@ get_docker_compose_cmd() {
     if [ -n "$DOCKER_PROFILE" ]; then
         base_cmd="${base_cmd} --profile ${DOCKER_PROFILE}"
     fi
-    # Append compose file path using the variable set in config.sh
-    base_cmd="${base_cmd} -f ${COMPOSE_FILE}"
     echo "$base_cmd"
 }
 
@@ -342,13 +340,12 @@ run_compose_up() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}") # Execute locally in subshell
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
-        # Note: run_remote_command already adds cd
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -361,12 +358,12 @@ run_compose_build() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -379,12 +376,12 @@ run_compose_down() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -397,12 +394,12 @@ run_compose_ps() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -415,15 +412,13 @@ run_compose_logs() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         # Note: Running logs directly might be interactive, handle accordingly
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
-        # For remote logs, especially with -f, direct ssh might be better than run_remote_command
-        # Or ensure run_remote_command handles interactive sessions if needed
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         log_info "[REMOTE] Running: ssh ${SERVER_USER}@${SERVER_HOST} -p ${SERVER_PORT} \"cd ${work_dir} && ${full_cmd}\""
         ssh "${SERVER_USER}@${SERVER_HOST}" -p "${SERVER_PORT}" "cd ${work_dir} && ${full_cmd}"
         return $?
@@ -437,12 +432,12 @@ run_compose_restart() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -455,12 +450,12 @@ run_compose_stop() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -473,12 +468,12 @@ run_compose_rm() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         run_remote_command "cd ${work_dir} && ${full_cmd}"
         return $?
     fi
@@ -491,14 +486,13 @@ run_compose_exec() {
     local work_dir=""
 
     if [ "$RUN_REMOTE" = false ]; then
-        work_dir="${LOCAL_DOCKER_DIR}"
+        work_dir="${LOCAL_PROJECT_DIR}"
         log_info "[LOCAL] Running: cd ${work_dir} && ${full_cmd}"
         # Running exec directly might be interactive, handle accordingly
         (cd "${work_dir}" && eval "${full_cmd}")
         return $?
     else
-        work_dir="${EFFECTIVE_DOCKER_DIR}"
-        # For remote exec, direct ssh might be better for interactivity
+        work_dir="${EFFECTIVE_PROJECT_DIR}"
         log_info "[REMOTE] Running: ssh ${SERVER_USER}@${SERVER_HOST} -p ${SERVER_PORT} \"cd ${work_dir} && ${full_cmd}\""
         ssh "${SERVER_USER}@${SERVER_HOST}" -p "${SERVER_PORT}" "cd ${work_dir} && ${full_cmd}"
         return $?

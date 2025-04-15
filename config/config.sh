@@ -79,7 +79,7 @@ export DOCKER_CMD="docker"
 export DOCKER_COMPOSE_CMD="docker compose"
 
 # Compose File Configuration
-export COMPOSE_FILE="${EFFECTIVE_DOCKER_DIR}/docker-compose.yml"
+export COMPOSE_FILE="${LOCAL_PROJECT_DIR}/docker-compose.yml"
 export ENV_FILE="${EFFECTIVE_DOCKER_DIR}/.env"
 
 # Basic Docker Compose Commands

@@ -64,58 +64,111 @@ deploy_docker() {
     print_section_header "Deploying Docker Configuration"
     
     if [ "$RUN_REMOTE" = false ]; then
-        print_info "Deploying Docker configuration to local directory..."
+        print_info "Deploying Docker configuration to local project directory: ${LOCAL_PROJECT_DIR}"
         
-        # Ensure local docker directory exists
-        mkdir -p "${LOCAL_DOCKER_DIR}"
+        # Ensure local project root and docker subdirectory exist
+        mkdir -p "${LOCAL_PROJECT_DIR}"
+        mkdir -p "${LOCAL_DOCKER_DIR}" # Target for docker subdirectory contents
         
-        # Copy Docker files from git directory
-        if [ -d "${LOCAL_GIT_DIR}/docker" ]; then
-            cp -r "${LOCAL_GIT_DIR}/docker/"* "${LOCAL_DOCKER_DIR}/"
-            
-            # Handle .env file
-            if [ -f "${LOCAL_GIT_DIR}/docker/.env" ]; then
-                cp "${LOCAL_GIT_DIR}/docker/.env" "${LOCAL_DOCKER_DIR}/.env"
-                print_success "Copied .env file"
-            elif [ -f "${LOCAL_GIT_DIR}/.env" ]; then
-                cp "${LOCAL_GIT_DIR}/.env" "${LOCAL_DOCKER_DIR}/.env"
-                print_success "Copied .env file from root"
-            elif [ -f "${LOCAL_GIT_DIR}/docker/.env.example" ]; then
-                print_warning "No .env file found, copying .env.example. You'll need to edit this!"
-                cp "${LOCAL_GIT_DIR}/docker/.env.example" "${LOCAL_DOCKER_DIR}/.env"
-            else
-                print_error "No .env or .env.example file found! Deployment may fail."
-            fi
+        # 1. Copy docker-compose.yml from git root to local project root
+        if [ -f "${LOCAL_GIT_DIR}/docker-compose.yml" ]; then
+            cp "${LOCAL_GIT_DIR}/docker-compose.yml" "${LOCAL_PROJECT_DIR}/docker-compose.yml"
+            if [ $? -ne 0 ]; then print_error "Failed to copy docker-compose.yml locally"; return 1; fi
+            print_success "Copied docker-compose.yml to ${LOCAL_PROJECT_DIR}"
         else
-            print_error "Source directory ${LOCAL_GIT_DIR}/docker not found!"
+            print_error "Source file ${LOCAL_GIT_DIR}/docker-compose.yml not found!"
             return 1
         fi
-    else
-        # Create remote directories first (if not already done in deploy_app)
-        print_info "Ensuring remote directories exist..."
-        ssh ${SERVER_USER}@${SERVER_HOST} "mkdir -p ${SERVER_PROJECT_DIR}/docker"
-        
-        # Copy Docker files to remote server
-        print_info "Copying Docker configuration files..."
-        if [ -d "${LOCAL_GIT_DIR}/docker" ]; then
-            scp -r "${LOCAL_GIT_DIR}/docker/"* "${SERVER_USER}@${SERVER_HOST}:${SERVER_PROJECT_DIR}/docker/"
-            
-            # Handle .env file
-            if [ -f "${LOCAL_GIT_DIR}/docker/.env" ]; then
-                scp "${LOCAL_GIT_DIR}/docker/.env" "${SERVER_USER}@${SERVER_HOST}:${SERVER_PROJECT_DIR}/docker/.env"
-                print_success "Copied .env file"
-            elif [ -f "${LOCAL_GIT_DIR}/.env" ]; then
-                scp "${LOCAL_GIT_DIR}/.env" "${SERVER_USER}@${SERVER_HOST}:${SERVER_PROJECT_DIR}/docker/.env"
-                print_success "Copied .env file from root"
-            elif [ -f "${LOCAL_GIT_DIR}/docker/.env.example" ]; then
-                print_warning "No .env file found, copying .env.example. You'll need to edit this!"
-                scp "${LOCAL_GIT_DIR}/docker/.env.example" "${SERVER_USER}@${SERVER_HOST}:${SERVER_PROJECT_DIR}/docker/.env"
-            else
-                print_error "No .env or .env.example file found! Deployment may fail."
-            fi
+
+        # 2. Copy contents of the docker subdirectory from git into the target docker subdirectory
+        local source_docker_dir="${LOCAL_GIT_DIR}/docker/"
+        local target_docker_dir="${LOCAL_DOCKER_DIR}/" # Should be .../Development/FoundryCord/docker/
+
+        if [ -d "${source_docker_dir}" ]; then
+            # --- DEBUGGING --- 
+            echo "DEBUG: Source docker dir: ${source_docker_dir}"
+            echo "DEBUG: Target docker dir: ${target_docker_dir}"
+            # --- END DEBUGGING ---
+            print_info "Copying contents of ${source_docker_dir} to ${target_docker_dir} ..."
+            # Use cp -a to copy contents recursively, preserving attributes. The trailing slashes are important.
+            cp -a "${source_docker_dir}." "${target_docker_dir}"
+            if [ $? -ne 0 ]; then print_error "Failed to copy contents of docker/ directory locally"; return 1; fi
+            print_success "Copied contents of docker/ to ${target_docker_dir}"
         else
-            print_error "Source directory ${LOCAL_GIT_DIR}/docker not found!"
+            print_warning "Source directory ${source_docker_dir} not found. Skipping content copy."
+            # Ensure target docker dir exists anyway
+             mkdir -p "${target_docker_dir}" 
+        fi
+
+        # 3. Handle .env file - prioritize root in git source, copy to target project root
+        local env_copied=false
+        if [ -f "${LOCAL_GIT_DIR}/.env" ]; then
+            cp "${LOCAL_GIT_DIR}/.env" "${LOCAL_PROJECT_DIR}/.env"
+            if [ $? -eq 0 ]; then print_success "Copied .env from git root to project root"; env_copied=true; else print_error "Failed to copy .env from git root"; fi
+        elif [ -f "${LOCAL_GIT_DIR}/docker/.env" ]; then
+             cp "${LOCAL_GIT_DIR}/docker/.env" "${LOCAL_PROJECT_DIR}/.env"
+             if [ $? -eq 0 ]; then print_success "Copied .env from git docker/ to project root"; env_copied=true; else print_error "Failed to copy .env from docker/"; fi
+        fi
+        # Optionally copy example if no .env found
+        if [ "$env_copied" = false ] && [ -f "${LOCAL_GIT_DIR}/docker/.env.example" ]; then
+            print_warning "No .env file found in source, copying docker/.env.example to project root. You'll need to edit this!"
+            cp "${LOCAL_GIT_DIR}/docker/.env.example" "${LOCAL_PROJECT_DIR}/.env"
+        elif [ "$env_copied" = false ]; then
+             print_error "No .env or .env.example file found in source! Deployment may fail."
+        fi
+    else
+        # REMOTE EXECUTION (Similar logic, using scp)
+        print_info "Deploying Docker configuration to remote project directory: ${EFFECTIVE_PROJECT_DIR}"
+
+        # Ensure remote project root and docker subdirectory exist
+        run_remote_command "mkdir -p ${EFFECTIVE_PROJECT_DIR}" "silent"
+        run_remote_command "mkdir -p ${EFFECTIVE_DOCKER_DIR}" "silent"
+
+        # 1. Copy docker-compose.yml from git root to remote project root
+        if [ -f "${LOCAL_GIT_DIR}/docker-compose.yml" ]; then
+            scp "${LOCAL_GIT_DIR}/docker-compose.yml" "${SERVER_USER}@${SERVER_HOST}:${EFFECTIVE_PROJECT_DIR}/docker-compose.yml"
+            if [ $? -ne 0 ]; then print_error "Failed to copy docker-compose.yml remotely"; return 1; fi
+            print_success "Copied docker-compose.yml to remote ${EFFECTIVE_PROJECT_DIR}"
+        else
+            print_error "Source file ${LOCAL_GIT_DIR}/docker-compose.yml not found!"
             return 1
+        fi
+
+        # 2. Copy contents of the docker subdirectory from git to remote docker subdirectory
+        local source_docker_dir="${LOCAL_GIT_DIR}/docker/"
+        local target_docker_dir="${EFFECTIVE_DOCKER_DIR}/" 
+
+        if [ -d "${source_docker_dir}" ]; then
+            # --- DEBUGGING --- 
+            echo "DEBUG: Source docker dir: ${source_docker_dir}"
+            echo "DEBUG: Target remote docker dir path: ${target_docker_dir}"
+            # --- END DEBUGGING ---
+            print_info "Copying contents of ${source_docker_dir} to remote ${target_docker_dir} ..."
+            # Use SCP to copy contents. Note: SCP doesn't have a direct equivalent of cp -a .
+            # We copy all files/dirs inside source docker/ into the remote docker dir.
+            # The trailing slash on source is important for scp -r contents
+            scp -r "${source_docker_dir}." "${SERVER_USER}@${SERVER_HOST}:${target_docker_dir}"
+            if [ $? -ne 0 ]; then print_error "Failed to copy contents of docker/ directory remotely"; return 1; fi
+            print_success "Copied contents of docker/ to remote ${target_docker_dir}"
+        else
+            print_warning "Source directory ${source_docker_dir} not found. Skipping content copy."
+        fi
+
+        # 3. Handle .env file - prioritize root, copy to remote project root
+        local env_copied=false
+        if [ -f "${LOCAL_GIT_DIR}/.env" ]; then
+            scp "${LOCAL_GIT_DIR}/.env" "${SERVER_USER}@${SERVER_HOST}:${EFFECTIVE_PROJECT_DIR}/.env"
+            if [ $? -eq 0 ]; then print_success "Copied .env from git root to remote project root"; env_copied=true; else print_error "Failed to copy .env from git root"; fi
+        elif [ -f "${LOCAL_GIT_DIR}/docker/.env" ]; then
+             scp "${LOCAL_GIT_DIR}/docker/.env" "${SERVER_USER}@${SERVER_HOST}:${EFFECTIVE_PROJECT_DIR}/.env"
+             if [ $? -eq 0 ]; then print_success "Copied .env from git docker/ to remote project root"; env_copied=true; else print_error "Failed to copy .env from docker/"; fi
+        fi
+        # Optionally copy example if no .env found
+        if [ "$env_copied" = false ] && [ -f "${LOCAL_GIT_DIR}/docker/.env.example" ]; then
+            print_warning "No .env file found in source, copying docker/.env.example to remote project root. You'll need to edit this!"
+            scp "${LOCAL_GIT_DIR}/docker/.env.example" "${SERVER_USER}@${SERVER_HOST}:${EFFECTIVE_PROJECT_DIR}/.env"
+        elif [ "$env_copied" = false ]; then
+             print_error "No .env or .env.example file found in source! Deployment may fail."
         fi
     fi
     
