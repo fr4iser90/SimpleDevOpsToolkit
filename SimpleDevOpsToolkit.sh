@@ -61,7 +61,9 @@ export REMOVE_VOLUMES=false
 export SKIP_CONFIRMATION=false
 export DIRECT_DEPLOY=false
 export DOCKER_PROFILE="" # Initialize Docker profile variable
+export DEFAULT_PROFILE="cpu" # Default profile if none is specified
 export DIRECT_ACTION=false # Initialize DIRECT_ACTION
+export DIRECT_ACTION_PERFORMED=false # NEW global flag
 
 # Parse command line arguments for local mode
 for arg in "$@"; do
@@ -109,31 +111,37 @@ main() {
     # Parse command line arguments first to potentially set RUN_REMOTE etc.
     parse_cli_args "$@"
     
-    # Validate configuration (which is now loaded via config.sh -> project_config.sh)
+    # --- Check if a direct action was performed and exit --- 
+    if [ "$DIRECT_ACTION_PERFORMED" = true ]; then
+        echo "Direct action completed."
+        exit 0 # Exit successfully after direct action
+    fi
+    # --------------------------------------------------------
+    
+    # Validate configuration (only if no direct action occurred)
     validate_config
     
-    # Handle direct deployment options first (bypass menus)
-    # If parse_cli_args handled a direct action and exited, this won't be reached.
-    # This check might need refinement depending on how DIRECT_DEPLOY is set/used.
-    # if [ "$DIRECT_DEPLOY" = true ]; then
-    #     exit $?
-    # fi
-    
-    # Handle special execution modes (WATCH_CONSOLE, INIT_ONLY)
-    # These also might need to exit directly from parse_cli_args if passed as flags
+    # Handle special execution modes (WATCH_CONSOLE, INIT_ONLY) 
+    # These are flags that modify behaviour but might lead to the menu OR exit
+    # WATCH_CONSOLE and INIT_ONLY flags are set in parse_cli_args but exit here
     if [ "${WATCH_CONSOLE:-false}" = true ]; then
+        if ! type print_info > /dev/null 2>&1; then echo "Error: print_info missing" >&2; exit 1; fi
         print_info "Starting deployment with console monitoring..."
+        if ! type run_deployment_with_monitoring > /dev/null 2>&1; then echo "Error: run_deployment_with_monitoring missing" >&2; exit 1; fi
         run_deployment_with_monitoring "${WATCH_SERVICES:-all}"
-        exit $?
+        exit $? # Exit after monitoring finishes
     fi
     
     if [ "${INIT_ONLY:-false}" = true ]; then
+        if ! type print_info > /dev/null 2>&1; then echo "Error: print_info missing" >&2; exit 1; fi
         print_info "Running initialization only..."
+        if ! type run_initial_setup > /dev/null 2>&1; then echo "Error: run_initial_setup missing" >&2; exit 1; fi
         run_initial_setup
-        exit $?
+        exit $? # Exit after init finishes
     fi
         
-    # Display main menu if no direct action caused an exit earlier
+    # Display main menu if no exit occurred earlier
+    if ! type show_main_menu > /dev/null 2>&1; then echo "Error: show_main_menu missing" >&2; exit 1; fi
     show_main_menu
 }
 
@@ -145,39 +153,49 @@ parse_cli_args() {
     local VIEW_LOGS_FOLLOW=false
     # Reset DIRECT_ACTION at the start of parsing
     DIRECT_ACTION=false 
+    DIRECT_ACTION_PERFORMED=false # Reset the new flag too
 
     while [[ $# -gt 0 ]]; do
         case $1 in
-            # >>> Add profile handling here <<<
+            # >>> Updated profile handling <<< 
             --profile=*) 
                 DOCKER_PROFILE="${1#*=}"
-                # Validate profile maybe? (cpu, gpu-nvidia, gpu-amd)
-                # TODO: Add validation if needed
-                echo "Using Docker profile: ${DOCKER_PROFILE}"
+                echo "Profile specified via --profile=*: ${DOCKER_PROFILE}"
+                shift # Consume argument
+                ;;
+            --profile) # Handle case where value is separate
+                if [[ -n "$2" && ! $2 =~ ^-- ]]; then
+                    DOCKER_PROFILE="$2"
+                    echo "Profile specified via --profile: ${DOCKER_PROFILE}"
+                    shift # Consume argument name
+                    shift # Consume argument value
+                else
+                    echo "Error: Argument for --profile is missing" >&2
+                    exit 1
+                fi
                 ;;
 
             # Development hot-reload options (Generic)
             --hot-reload=*) 
                 local target="${1#*=}"
-                # Check if target is valid (from HOT_RELOAD_TARGETS in config)
                 if [[ " ${HOT_RELOAD_TARGETS} " =~ " ${target} " ]]; then
-                    RUN_REMOTE=true # Hot-reload only makes sense locally
+                    RUN_REMOTE=true
                     print_info "Initiating hot-reload for target: ${target}..."
-                    run_hot_reload "${target}" # Assumes this function exists in development_functions.sh
-                    exit $?
+                    run_hot_reload "${target}"
+                    DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return from function
                 else
                     print_error "Invalid hot-reload target: '${target}'."
                     print_info "Valid targets are: ${HOT_RELOAD_TARGETS}"
-                    exit 1
+                    exit 1 # Error exit is okay here
                 fi
                 ;;
             --hot-reload-all)
-                RUN_REMOTE=true # Hot-reload only makes sense locally
+                RUN_REMOTE=true
                 print_info "Initiating hot-reload for all targets: ${HOT_RELOAD_TARGETS}..."
                 for target in ${HOT_RELOAD_TARGETS}; do
-                    run_hot_reload "${target}" # Assumes this function exists
+                    run_hot_reload "${target}"
                 done
-                exit $?
+                DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return
                 ;;
 
             # Direct Log Viewing
@@ -193,37 +211,42 @@ parse_cli_args() {
                 ;;
 
             # Existing options...
-            --local) # Ensure --local is handled *after* --profile and hot-reload
-                export RUN_REMOTE=true
+            --local)
+                export RUN_REMOTE=true # Note: RUN_REMOTE was set to true before, should be false for local?
                 echo "Running in local mode with project directory: $LOCAL_PROJECT_DIR"
+                shift; continue # Consume arg and continue loop
                 ;;
             --init-only)
-                INIT_ONLY=true # Flag for main loop
-                DIRECT_ACTION=true
+                INIT_ONLY=true 
+                DIRECT_ACTION=true # Keep this for potential future use? Or remove?
+                shift; continue
                 ;;
             --skip-confirmation)
                 SKIP_CONFIRMATION=true
+                shift; continue
                 ;;
             --remove-volumes)
                 REMOVE_VOLUMES=true
+                shift; continue
                 ;;
             --env-file=*) 
                 ENV_FILE="${1#*=}"
                 [ -f "$ENV_FILE" ] && source_env_file "$ENV_FILE"
+                shift; continue 
                 ;;
             
-            # Deployment modes that should exit directly
+            # Deployment modes that should exit directly -> Now set flag and return
             --quick-deploy)
-                DIRECT_ACTION=true; run_quick_deploy; exit $?
+                DIRECT_ACTION=true; run_quick_deploy; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --quick-deploy-attach)
-                DIRECT_ACTION=true; run_quick_deploy_attach; exit $?
+                DIRECT_ACTION=true; run_quick_deploy_attach; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --partial-deploy)
-                DIRECT_ACTION=true; run_partial_deploy; exit $?
+                DIRECT_ACTION=true; run_partial_deploy; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --deploy-with-auto-start)
-                DIRECT_ACTION=true; run_quick_deploy_with_auto_start; exit $?
+                DIRECT_ACTION=true; run_quick_deploy_with_auto_start; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --full-reset)
                 DIRECT_ACTION=true
@@ -231,86 +254,111 @@ parse_cli_args() {
                     print_error "⚠️ WARNING: This will COMPLETELY ERASE your database!"
                     if ! get_confirmed_input "Are you ABSOLUTELY sure?" "DELETE"; then
                         print_info "Cancelled."
-                        exit 1
+                        exit 1 # Exit on cancel
                     fi
                 fi
                 run_full_reset_deploy
-                exit $?
+                DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --deploy-with-monitoring)
                 DIRECT_ACTION=true
                 run_deployment_with_monitoring "all"
-                exit $?
+                DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --watch-console)
-                WATCH_CONSOLE=true # Flag for main loop
+                WATCH_CONSOLE=true 
                 DIRECT_ACTION=true
+                shift; continue
                 ;;
             --watch=*)
-                WATCH_SERVICES="${1#*=}"; WATCH_CONSOLE=true # Flag for main loop
+                WATCH_SERVICES="${1#*=}"; WATCH_CONSOLE=true 
                 DIRECT_ACTION=true
+                shift; continue
                 ;;
 
             # --- ADD NEW SAFE DOWN FLAG ---    
             --safe-down-volumes)
                 DIRECT_ACTION=true
                 print_warning "Stopping containers and removing volumes (docker compose down -v)..."
-                run_compose_down -v # Call helper with -v flag
-                exit $? # Exit immediately
+                run_compose_down -v 
+                DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
 
-            # Testing flags that should exit directly
+            # Testing flags that should exit directly -> Now set flag and return
             --test-ALL)
-                DIRECT_ACTION=true; run_tests_with_docker_container "all"; exit $?
+                DIRECT_ACTION=true; run_tests_with_docker_container "all"; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --test-unit)
-                DIRECT_ACTION=true; run_unit_tests; exit $?
+                DIRECT_ACTION=true; run_unit_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --test-integration)
-                DIRECT_ACTION=true; run_integration_tests; exit $?
+                DIRECT_ACTION=true; run_integration_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --test-system)
-                DIRECT_ACTION=true; run_system_tests; exit $?
+                DIRECT_ACTION=true; run_system_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --test-ordered)
-                DIRECT_ACTION=true; run_ordered_tests; exit $?
+                DIRECT_ACTION=true; run_ordered_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --test-simple)
-                DIRECT_ACTION=true; run_simple_test; exit $? # run_simple_test already exits with 0 on success
+                DIRECT_ACTION=true; run_simple_test; DIRECT_ACTION_PERFORMED=true; return 0 
                 ;;
             --test-dashboard)
-                DIRECT_ACTION=true; run_dashboard_tests; exit $?
+                DIRECT_ACTION=true; run_dashboard_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --sequential-tests)
-                DIRECT_ACTION=true; run_sequential_tests; exit $?
+                DIRECT_ACTION=true; run_sequential_tests; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
             --sync-results)
-                DIRECT_ACTION=true; sync_test_results; exit $?
+                DIRECT_ACTION=true; sync_test_results; DIRECT_ACTION_PERFORMED=true; return 0
                 ;;
 
             # Unknown argument
             *)
-                # Avoid erroring out if it's just the --local flag which is handled elsewhere
-                if [ "$1" != "--local" ]; then 
-                    echo "⚠️ Unknown argument: $1"
-                fi
+                # Avoid erroring out if it's just the --local flag which is handled elsewhere?
+                # No, unknown flags should cause an error or be ignored after shifting.
+                echo "⚠️ Unknown argument: $1" >&2
+                # exit 1 # Optional: exit on unknown flag
+                shift # Consume unknown argument
                 ;;
         esac
-        shift
+        # shift # Removed from here - shifting is handled within cases or specifically below
     done
 
+    # === Set and validate profile AFTER loop ===
+    # Set default profile if none was provided
+    if [ -z "$DOCKER_PROFILE" ]; then
+        echo "No profile specified, using default: $DEFAULT_PROFILE"
+        DOCKER_PROFILE="$DEFAULT_PROFILE"
+    fi
+
+    # Validate profile
+    case "$DOCKER_PROFILE" in
+        cpu|gpu-nvidia|gpu-amd)
+            # Valid profile
+            ;;
+        *)
+            echo "Error: Invalid profile specified: '$DOCKER_PROFILE'. Valid profiles: cpu, gpu-nvidia, gpu-amd" >&2
+            exit 1
+            ;;
+    esac
+
+    # Echo the final profile being used
+    echo "Running with Docker profile: ${DOCKER_PROFILE}"
+
     # === Handle Direct Log View Action After Loop ===
-    # Check if --logs was specified (and no other direct action already exited)
     if [ -n "$VIEW_LOGS_TARGET" ]; then
         # Ensure log_functions.sh is sourced if parse_cli_args is called before source lines in main
         if ! type run_direct_log_view > /dev/null 2>&1;
             then print_error "Log function 'run_direct_log_view' not found. Ensure log_functions.sh is sourced."; exit 1;
         fi
         run_direct_log_view "$VIEW_LOGS_TARGET" "$VIEW_LOGS_LINES" "$VIEW_LOGS_FOLLOW"
-        exit $? # Exit after viewing logs
+        DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return after viewing logs
     fi
 
-    # If we reach here, no direct action caused an exit during the loop or log check
+    # If we reach here, no direct action caused an exit or return during the loop or log check
+    # Return 1 indicates no direct action was performed that should cause an exit in main
+    return 1 
 }
 
 # Run the main function with all command line arguments
