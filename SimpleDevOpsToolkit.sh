@@ -7,17 +7,25 @@
 # Store the original directory where the script was called from
 export SCRIPT_CALLER_DIR=$(pwd)
 
-# Move to the script's directory (which we assume is the toolkit root)
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-cd "$SCRIPT_DIR" || exit 1
+# --- Robust way to find the script's real directory --- 
+SOURCE=${BASH_SOURCE[0]}
+while [ -L "$SOURCE" ]; do # Resolve $SOURCE until the file is no longer a symlink
+  DIR=$( cd -P "$( dirname "$SOURCE" )" &> /dev/null && pwd )
+  SOURCE=$(readlink "$SOURCE")
+  [[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE # If readlink -f doesn't exist, resolve relative symlink
+done
+SCRIPT_DIR=$( cd -P "$( dirname "$SOURCE" )" &> /dev/null && pwd )
+# --- End of script directory finding ---
 
-# Apply permissions to all scripts first
+# NO automatic cd here anymore - sourcing uses absolute paths based on SCRIPT_DIR
+# cd "$SCRIPT_DIR" || exit 1 
+
+# Apply permissions to all scripts first (using absolute paths)
 echo "Setting executable permissions for all utility scripts..."
-# find utils -name "*.sh" -type f -exec chmod +x {} \; # Assuming utils structure might change, let's be more specific
-find . -maxdepth 2 -path './functions/*.sh' -exec chmod +x {} \;
-find . -maxdepth 2 -path './lib/*.sh' -exec chmod +x {} \;
-find . -maxdepth 2 -path './menus/*.sh' -exec chmod +x {} \;
-find . -maxdepth 2 -path './ui/*.sh' -exec chmod +x {} \;
+find "$SCRIPT_DIR" -maxdepth 2 -path '*/functions/*.sh' -exec chmod +x {} \;
+find "$SCRIPT_DIR" -maxdepth 2 -path '*/lib/*.sh' -exec chmod +x {} \;
+find "$SCRIPT_DIR" -maxdepth 2 -path '*/menus/*.sh' -exec chmod +x {} \;
+find "$SCRIPT_DIR" -maxdepth 2 -path '*/ui/*.sh' -exec chmod +x {} \;
 # Keep Python permission setting if needed
 # find utils -name "*.py" -type f -exec chmod +x {} \;
 echo "Permissions set successfully."
@@ -66,33 +74,33 @@ for arg in "$@"; do
     esac
 done
 
-# Source common utilities and configuration *from the toolkit's directory*
-source "./config/config.sh"
-source "./lib/common.sh"
+# Source common utilities and configuration *using absolute paths*
+source "$SCRIPT_DIR/config/config.sh"
+source "$SCRIPT_DIR/lib/common.sh"
 
-# Source UI modules
-source "./ui/display_functions.sh"
-source "./ui/input_functions.sh"
+# Source UI modules *using absolute paths*
+source "$SCRIPT_DIR/ui/display_functions.sh"
+source "$SCRIPT_DIR/ui/input_functions.sh"
 
-# Source function modules
-source "./functions/deployment_functions.sh"
-source "./functions/container_functions.sh"
-source "./functions/database_functions.sh"
-source "./functions/testing_functions.sh"
-source "./functions/development_functions.sh"
-source "./functions/log_functions.sh"
+# Source function modules *using absolute paths*
+source "$SCRIPT_DIR/functions/deployment_functions.sh"
+source "$SCRIPT_DIR/functions/container_functions.sh"
+source "$SCRIPT_DIR/functions/database_functions.sh"
+source "$SCRIPT_DIR/functions/testing_functions.sh"
+source "$SCRIPT_DIR/functions/development_functions.sh"
+source "$SCRIPT_DIR/functions/log_functions.sh"
 
-# Source menu modules
-source "./menus/main_menu.sh"
-source "./menus/deployment_menu.sh"
-source "./menus/container_menu.sh"
-source "./menus/database_menu.sh"
-source "./menus/testing_menu.sh"
-source "./menus/development_menu.sh"
-source "./menus/logs_menu.sh"
-source "./menus/env_files_menu.sh"
-source "./menus/auto_start_menu.sh"
-source "./menus/watch_menu.sh"
+# Source menu modules *using absolute paths*
+source "$SCRIPT_DIR/menus/main_menu.sh"
+source "$SCRIPT_DIR/menus/deployment_menu.sh"
+source "$SCRIPT_DIR/menus/container_menu.sh"
+source "$SCRIPT_DIR/menus/database_menu.sh"
+source "$SCRIPT_DIR/menus/testing_menu.sh"
+source "$SCRIPT_DIR/menus/development_menu.sh"
+source "$SCRIPT_DIR/menus/logs_menu.sh"
+source "$SCRIPT_DIR/menus/env_files_menu.sh"
+source "$SCRIPT_DIR/menus/auto_start_menu.sh"
+source "$SCRIPT_DIR/menus/watch_menu.sh"
 
 # ------------------------------------------------------
 # Main function
@@ -113,13 +121,13 @@ main() {
     
     # Handle special execution modes (WATCH_CONSOLE, INIT_ONLY)
     # These also might need to exit directly from parse_cli_args if passed as flags
-    if [ "$WATCH_CONSOLE" = true ]; then
+    if [ "${WATCH_CONSOLE:-false}" = true ]; then
         print_info "Starting deployment with console monitoring..."
-        run_deployment_with_monitoring "$WATCH_SERVICES"
+        run_deployment_with_monitoring "${WATCH_SERVICES:-all}"
         exit $?
     fi
     
-    if [ "$INIT_ONLY" = true ]; then
+    if [ "${INIT_ONLY:-false}" = true ]; then
         print_info "Running initialization only..."
         run_initial_setup
         exit $?

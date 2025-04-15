@@ -83,11 +83,69 @@ This makes the command available to all users on the system.
     sudo ln -s "$(pwd)/SimpleDevOpsToolkit.sh" /usr/local/bin/SimpleDevOpsToolkit
     ```
 
-After setting up the symlink using either method, you can navigate to your project directory (e.g., `cd ~/Documents/Git/FoundryCord`) and run the toolkit simply by typing:
+**Option 3: NixOS / Home Manager Installation**
 
-```bash
-SimpleDevOpsToolkit
-```
+If you are using NixOS or Home Manager, you should manage your PATH and installed tools declaratively through your Nix configuration instead of creating manual symlinks and exporting PATH variables in `.zshrc`.
+
+1.  **Ensure `$HOME/.local/bin` is managed by Nix (Optional but Recommended):**
+    While Home Manager might add `$HOME/.local/bin` to your PATH by default depending on your setup, it's cleaner to let Nix manage the symlink location as well. A common pattern is to have Nix manage links in a dedicated profile directory that *is* added to your path.
+
+2.  **Create the Symlink Declaratively (Example using Home Manager):**
+    You need to add an entry to your `home.nix` (or equivalent Home Manager configuration file) to create the symlink. The exact path to your cloned `SimpleDevOpsToolkit.sh` script is needed here. Replace `/path/to/your/SimpleDevOpsToolkit` with the actual absolute path where you cloned the repository.
+
+    ```nix
+    { config, pkgs, ... }:
+
+    let
+      # Define the absolute path to the toolkit script
+      simpleDevOpsToolkitScript = "/path/to/your/SimpleDevOpsToolkit/SimpleDevOpsToolkit.sh";
+    in
+    {
+      # ... your other home-manager configuration ...
+
+      # Ensure the target directory for the link exists and is in PATH
+      # Home Manager usually puts packages in ~/.nix-profile/bin which is in PATH
+      # Or you might manage ~/.local/bin via home.file as well.
+      # Let's assume you want the link in ~/.local/bin managed by home-manager:
+      xdg.enable = true; # Needed for xdg.dataFile
+      home.file.".local/bin/SimpleDevOpsToolkit" = {
+        source = simpleDevOpsToolkitScript;
+        executable = true; # Make the link itself executable
+      };
+
+      # Alternative: Link into nix profile bin (often preferred)
+      # home.file.".nix-profile/bin/SimpleDevOpsToolkit" = {
+      #   source = simpleDevOpsToolkitScript;
+      #   executable = true;
+      # };
+
+      # Make sure the *source script* itself has execute permissions
+      # You might need to handle this outside Nix or find a Nix way
+      # if the git repo itself doesn't preserve permissions.
+
+      # Ensure the PATH includes the directory where the link is created
+      # (e.g., ~/.local/bin). Home Manager often handles this automatically
+      # for ~/.nix-profile/bin. If linking to ~/.local/bin, ensure it's added:
+      home.sessionPath = [
+        "$HOME/.local/bin" # Add this line if linking to .local/bin
+      ];
+
+      # ... rest of your configuration ...
+    }
+    ```
+    **Note:** This is a conceptual example. The exact implementation (`home.file`, `home.sessionPath`, handling executability) might differ based on your specific Home Manager setup and preferences. Consult the Home Manager documentation.
+
+3.  **Apply the Configuration:**
+    After editing your Nix configuration, apply the changes by running:
+    ```bash
+    home-manager switch
+    ```
+    Or, if managing system-wide with NixOS:
+    ```bash
+    sudo nixos-rebuild switch
+    ```
+
+This approach ensures that the `SimpleDevOpsToolkit` command is correctly integrated into your Nix-managed environment.
 
 ## Main Menu Options
 
