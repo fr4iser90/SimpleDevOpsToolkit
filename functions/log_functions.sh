@@ -146,6 +146,7 @@ download_logs() {
 
 # Run log view directly based on arguments (non-interactive)
 run_direct_log_view() {
+    
     local container_name="$1"
     local lines="${2:-50}" # Default 50 lines
     local follow="${3:-false}"
@@ -165,15 +166,18 @@ run_direct_log_view() {
             print_info "Viewing last ${lines} lines for ${log_type_name}..."
         fi
         local_log_cmd="${local_log_cmd} ${container_name}"
-        # Execute directly
-        eval "${local_log_cmd}"
-        return $?
+        # Execute directly - NO EVAL <<< CHANGED
+        ${local_log_cmd} # <<< CHANGED
+        local exit_code=$? # <<< ADDED
+        set +x # <<< ADDED FOR DEBUGGING
+        return ${exit_code} # <<< CHANGED
     fi
 
     # Remote Mode Check
     # Check if the container exists remotely
     if ! run_remote_command "${DOCKER_CMD} ps -a --filter name=^/${container_name}$ --format '{{.Names}}' | grep -q ${container_name}" "silent"; then
         print_error "Container '${container_name}' not found on remote server."
+        set +x # <<< ADDED FOR DEBUGGING
         return 1
     fi
 
@@ -183,13 +187,17 @@ run_direct_log_view() {
         print_info "Following logs for ${log_type_name} (Press Ctrl+C to exit)..."
         # Use direct ssh for follow to work correctly
         ssh "${SERVER_USER}@${SERVER_HOST}" -p "${SERVER_PORT}" "${log_cmd} ${container_name}"
-        return $?
+        local exit_code=$? # <<< ADDED
+        set +x # <<< ADDED FOR DEBUGGING
+        return ${exit_code} # <<< CHANGED
     else
         print_info "Viewing last ${lines} lines for ${log_type_name}..."
         log_cmd="${log_cmd} ${container_name}"
         # Use run_remote_command for non-following logs
         run_remote_command "${log_cmd}"
-        return $?
+        local exit_code=$? # <<< ADDED
+        set +x # <<< ADDED FOR DEBUGGING
+        return ${exit_code} # <<< CHANGED
     fi
     
     # No "press enter" or menu loop for direct action

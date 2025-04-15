@@ -63,7 +63,7 @@ export DIRECT_DEPLOY=false
 export DOCKER_PROFILE="" # Initialize Docker profile variable
 export DEFAULT_PROFILE="cpu" # Default profile if none is specified
 export DIRECT_ACTION=false # Initialize DIRECT_ACTION
-export DIRECT_ACTION_PERFORMED=false # NEW global flag
+export BYPASS_MENU=false # NEW global flag
 
 # Parse command line arguments for local mode
 for arg in "$@"; do
@@ -112,8 +112,7 @@ main() {
     parse_cli_args "$@"
     
     # --- Check if a direct action was performed and exit --- 
-    if [ "$DIRECT_ACTION_PERFORMED" = true ]; then
-        echo "Direct action completed."
+    if [ "$BYPASS_MENU" = true ]; then
         exit 0 # Exit successfully after direct action
     fi
     # --------------------------------------------------------
@@ -153,7 +152,7 @@ parse_cli_args() {
     local VIEW_LOGS_FOLLOW=false
     # Reset DIRECT_ACTION at the start of parsing
     DIRECT_ACTION=false 
-    DIRECT_ACTION_PERFORMED=false # Reset the new flag too
+    BYPASS_MENU=false # Reset the new flag too
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -182,7 +181,7 @@ parse_cli_args() {
                     RUN_REMOTE=true
                     print_info "Initiating hot-reload for target: ${target}..."
                     run_hot_reload "${target}"
-                    DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return from function
+                    BYPASS_MENU=true; return 0 # Set flag and return from function
                 else
                     print_error "Invalid hot-reload target: '${target}'."
                     print_info "Valid targets are: ${HOT_RELOAD_TARGETS}"
@@ -195,19 +194,22 @@ parse_cli_args() {
                 for target in ${HOT_RELOAD_TARGETS}; do
                     run_hot_reload "${target}"
                 done
-                DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return
+                BYPASS_MENU=true; return 0 # Set flag and return
                 ;;
 
             # Direct Log Viewing
             --logs=*)
                 DIRECT_ACTION=true # Mark that a direct action is happening
                 VIEW_LOGS_TARGET="${1#*=}"
+                shift # <<< ADDED TO CONSUME ARGUMENT
                 ;;
             --lines=*)
                 VIEW_LOGS_LINES="${1#*=}"
+                shift # <<< ADDED TO CONSUME ARGUMENT
                 ;;
             --follow)
                 VIEW_LOGS_FOLLOW=true
+                shift # <<< ADDED TO CONSUME ARGUMENT
                 ;;
 
             # Existing options...
@@ -237,16 +239,16 @@ parse_cli_args() {
             
             # Deployment modes that should exit directly -> Now set flag and return
             --quick-deploy)
-                DIRECT_ACTION=true; run_quick_deploy; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_quick_deploy; BYPASS_MENU=true; return 0
                 ;;
             --quick-deploy-attach)
-                DIRECT_ACTION=true; run_quick_deploy_attach; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_quick_deploy_attach; BYPASS_MENU=true; return 0
                 ;;
             --partial-deploy)
-                DIRECT_ACTION=true; run_partial_deploy; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_partial_deploy; BYPASS_MENU=true; return 0
                 ;;
             --deploy-with-auto-start)
-                DIRECT_ACTION=true; run_quick_deploy_with_auto_start; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_quick_deploy_with_auto_start; BYPASS_MENU=true; return 0
                 ;;
             --full-reset)
                 DIRECT_ACTION=true
@@ -258,12 +260,12 @@ parse_cli_args() {
                     fi
                 fi
                 run_full_reset_deploy
-                DIRECT_ACTION_PERFORMED=true; return 0
+                BYPASS_MENU=true; return 0
                 ;;
             --deploy-with-monitoring)
                 DIRECT_ACTION=true
                 run_deployment_with_monitoring "all"
-                DIRECT_ACTION_PERFORMED=true; return 0
+                BYPASS_MENU=true; return 0
                 ;;
             --watch-console)
                 WATCH_CONSOLE=true 
@@ -281,36 +283,36 @@ parse_cli_args() {
                 DIRECT_ACTION=true
                 print_warning "Stopping containers and removing volumes (docker compose down -v)..."
                 run_compose_down -v 
-                DIRECT_ACTION_PERFORMED=true; return 0
+                BYPASS_MENU=true; return 0
                 ;;
 
             # Testing flags that should exit directly -> Now set flag and return
             --test-ALL)
-                DIRECT_ACTION=true; run_tests_with_docker_container "all"; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_tests_with_docker_container "all"; BYPASS_MENU=true; return 0
                 ;;
             --test-unit)
-                DIRECT_ACTION=true; run_unit_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_unit_tests; BYPASS_MENU=true; return 0
                 ;;
             --test-integration)
-                DIRECT_ACTION=true; run_integration_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_integration_tests; BYPASS_MENU=true; return 0
                 ;;
             --test-system)
-                DIRECT_ACTION=true; run_system_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_system_tests; BYPASS_MENU=true; return 0
                 ;;
             --test-ordered)
-                DIRECT_ACTION=true; run_ordered_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_ordered_tests; BYPASS_MENU=true; return 0
                 ;;
             --test-simple)
-                DIRECT_ACTION=true; run_simple_test; DIRECT_ACTION_PERFORMED=true; return 0 
+                DIRECT_ACTION=true; run_simple_test; BYPASS_MENU=true; return 0 
                 ;;
             --test-dashboard)
-                DIRECT_ACTION=true; run_dashboard_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_dashboard_tests; BYPASS_MENU=true; return 0
                 ;;
             --sequential-tests)
-                DIRECT_ACTION=true; run_sequential_tests; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; run_sequential_tests; BYPASS_MENU=true; return 0
                 ;;
             --sync-results)
-                DIRECT_ACTION=true; sync_test_results; DIRECT_ACTION_PERFORMED=true; return 0
+                DIRECT_ACTION=true; sync_test_results; BYPASS_MENU=true; return 0
                 ;;
 
             # Unknown argument
@@ -353,7 +355,7 @@ parse_cli_args() {
             then print_error "Log function 'run_direct_log_view' not found. Ensure log_functions.sh is sourced."; exit 1;
         fi
         run_direct_log_view "$VIEW_LOGS_TARGET" "$VIEW_LOGS_LINES" "$VIEW_LOGS_FOLLOW"
-        DIRECT_ACTION_PERFORMED=true; return 0 # Set flag and return after viewing logs
+        BYPASS_MENU=true; return 0 # Set flag and return after viewing logs
     fi
 
     # If we reach here, no direct action caused an exit or return during the loop or log check
