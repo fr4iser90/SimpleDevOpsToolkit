@@ -32,7 +32,7 @@ This utility suite provides a generic framework for managing Docker-based applic
 
 1.  **Clone the Toolkit Repository:**
     ```bash
-    git clone <repository_url> /path/to/SimpleDevOpsToolkit
+    git clone https://github.com/fr4iser90/SimpleDevOpsToolkit.git /path/to/SimpleDevOpsToolkit
     cd /path/to/SimpleDevOpsToolkit
     ```
     Replace `<repository_url>` with the actual URL of the toolkit's repository. Choose a suitable location like `~/tools/` or `~/bin/`.
@@ -46,7 +46,7 @@ This utility suite provides a generic framework for managing Docker-based applic
 3.  **Run the Toolkit:**
     *   Navigate to your project's directory:
         ```bash
-        cd ~/Documents/Git/FoundryCord
+        cd ~/Documents/Git/FoundryCord (EXAMPLE)
         ```
     *   Execute the toolkit script using its full path:
         ```bash
@@ -97,7 +97,7 @@ If you are using NixOS or Home Manager, you should manage your PATH and installe
     While Home Manager might add `$HOME/.local/bin` to your PATH by default depending on your setup, it's cleaner to let Nix manage the symlink location as well. A common pattern is to have Nix manage links in a dedicated profile directory that *is* added to your path.
 
 2.  **Create the Symlink Declaratively (Example using Home Manager):**
-    You need to add an entry to your `home.nix` (or equivalent Home Manager configuration file) to create the symlink. The exact path to your cloned `SimpleDevOpsToolkit.sh` script is needed here. Replace `/path/to/your/SimpleDevOpsToolkit` with the actual absolute path where you cloned the repository.
+    You need to add an entry to your `home.nix` (or add an equivialent nix file) to create the symlink. The exact path to your cloned `SimpleDevOpsToolkit.sh` script is needed here. Replace `/path/to/your/SimpleDevOpsToolkit` with the actual absolute path where you cloned the repository.
 
     ```nix
     { config, pkgs, ... }:
@@ -348,14 +348,6 @@ The utility now provides several ways to collect and analyze system feedback for
 3. **Health Reports**: Generate system health reports.
 4. **Deployment Summary**: View summary after deployment completes.
 5. **Notification Options**: Configure email or Discord notifications.
-
-## Support
-
-For issues with this utility, please open an issue in the project repository or visit our support channel.
-
-## Contribute
-
-We welcome contributions to improve this utility! See our contributing guidelines for more information.
 
 ## About
 
